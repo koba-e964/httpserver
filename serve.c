@@ -49,7 +49,7 @@ void bad_req(int sock) {
   send(sock, (void *) bad_request_str, sizeof bad_request_str, 0);
 }
 
-int get_serve(const char *docroot, char *uri, int sock) {
+int get_serve(const char *docroot, char *uri, int sock, int head) {
   int dlen = strlen(docroot);
   int ulen = strlen(uri);
   char *tmp = (char *) malloc(dlen + 2 + ulen);
@@ -82,11 +82,14 @@ int get_serve(const char *docroot, char *uri, int sock) {
   O(outbuf);
   O("\r\n");
   O("\r\n");
-  FILE *fp = fopen(tmp, "r");
-  char *content = (char *) malloc(filesize);
-  (void) fread(content, filesize, 1, fp);
-  fclose(fp);
-  O(content);
+  if (! head) {
+    FILE *fp = fopen(tmp, "r");
+    char *content = (char *) malloc(filesize);
+    int len = fread(content, filesize, 1, fp);
+    (void) len;
+    fclose(fp);
+    O(content);
+  }
   free(tmp);
   return 0;
  fail:
@@ -144,6 +147,7 @@ void create_server(const char *docroot, int sock, int cpid) {
     }
     printf("=== %s\n", buf);
     char method[10], uri[1000], http_ver[20];
+    int head = -1;
     int res = sscanf(buf, "%9s %999s %19s", method, uri, http_ver);
     if (res != 3) {
       // not a good request
@@ -155,11 +159,18 @@ void create_server(const char *docroot, int sock, int cpid) {
 #if DEBUG
       printf("***** GET *****\n  uri = %s, http-version = %s\n", uri, http_ver);
 #endif
+      head = 0;
     }
     if (strcmp(method, "HEAD") == 0) {
 #if DEBUG
-      printf("***** GET *****\n  uri = %s, http-version = %s\n", uri, http_ver);
+      printf("***** HEAD *****\n  uri = %s, http-version = %s\n", uri, http_ver);
 #endif
+      head = 1;
+    }
+    if (head == -1) {
+      bad_req(clisock);
+      close(clisock);
+      continue;
     }
     while (1) {
       ssize_t size = fd_getline(clisock, SIZE, buf);
@@ -177,7 +188,7 @@ void create_server(const char *docroot, int sock, int cpid) {
       printf(" input = \"%s\"", buf);
 #endif
     }
-    get_serve(docroot, uri, clisock);
+    get_serve(docroot, uri, clisock, head);
     close(clisock);
 #if DEBUG
     printf("closed (sock=%d, cpid=%d, cliaddr=%s)\n", clisock, cpid, addrstr);
