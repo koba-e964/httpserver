@@ -82,7 +82,11 @@ int get_serve(const char *docroot, char *uri, int sock) {
   O(outbuf);
   O("\r\n");
   O("\r\n");
-  O("22");
+  FILE *fp = fopen(tmp, "r");
+  char *content = (char *) malloc(filesize);
+  (void) fread(content, filesize, 1, fp);
+  fclose(fp);
+  O(content);
   free(tmp);
   return 0;
  fail:
